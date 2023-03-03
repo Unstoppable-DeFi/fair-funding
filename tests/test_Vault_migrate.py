@@ -26,17 +26,20 @@ def test_migration_admin_can_set_migrator(vault, owner, mock_migrator):
     assert vault.migration_executed() == False
 
 
-def test_migrate_calls_migrator(vault, owner, mock_migrator):
+def test_migrate_calls_migrator(vault, owner, mock_migrator, weth):
     vault.activate_migration(mock_migrator)
     boa.env.vm.patch.timestamp += 30 * 60 * 60 * 24
 
     assert vault.is_operator(owner)
 
-    assert mock_migrator.was_called() == False
+    # we use weth allowance as a proxy to check migrate was executed in the right context
+    allowance_before = weth.allowance(vault, "0x0000000000000000000000000000000000000666")
 
     vault.migrate()
 
-    assert mock_migrator.was_called() == True
+    allowance_after = weth.allowance(vault, "0x0000000000000000000000000000000000000666")
+    assert allowance_after != allowance_before
+    assert allowance_after == 666
 
 
 def test_migrate_sets_migration_executed(vault, owner, mock_migrator):

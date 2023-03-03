@@ -87,7 +87,6 @@ interface Migrator:
     def migrate(): nonpayable
 
 
-PRECISION: constant(uint256) = 10**6
 DECIMALS: constant(uint256) = 10**18
 
 ALCX_YVWETH: constant(address) = 0xa258C4606Ca8206D8aA700cE2143D7db854D168c
@@ -416,7 +415,7 @@ def _mark_as_claimable(_amount: uint256):
 
     assert ERC20(WETH).balanceOf(self) >= _amount
 
-    self.amount_claimable_per_share += _amount * PRECISION / self.total_shares
+    self.amount_claimable_per_share += _amount * DECIMALS / self.total_shares
     
 
 @view
@@ -436,7 +435,7 @@ def _claimable_for_token(_token_id: uint256) -> uint256:
     if position.is_liquidated:
         return 0
     
-    total_claimable_for_position: uint256 = position.shares_owned * self.amount_claimable_per_share / PRECISION
+    total_claimable_for_position: uint256 = position.shares_owned * self.amount_claimable_per_share / DECIMALS
     return total_claimable_for_position - position.amount_claimed
 
 

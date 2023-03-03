@@ -102,3 +102,29 @@ def test_cannot_liquidate_already_liquidated(vault, nft, owner):
 
     with boa.reverts("position already liquidated"):
         vault.liquidate(0, 0)
+
+
+def test_liquidate_calls_claim(vault, alchemist, nft, owner, weth):
+    nft.DEBUG_transferMinter(owner)
+    nft.mint(owner, 0)
+    alchemist.eval(f"self.total_value = {1000 * 10**18}")
+    alchemist.eval(f"self.debt = {500 * 10**18}")
+    vault.eval(
+        f"self.positions[0] = Position({{token_id: 0, amount_deposited: {1000*10**18}, amount_claimed: 0, shares_owned: {1000*10**18}, is_liquidated: False }})"
+    )
+
+    vault.eval(f"self.amount_claimable_per_share = 0")
+    vault.eval(f"self.total_shares = {1000*10**18}")
+    weth.transfer(vault, 1 * 10**18)
+    vault.internal._mark_as_claimable(1 * 10**18)
+    amount = vault.claimable_for_token(0)
+    assert amount == 10**18  # 1 ETH
+
+    position_before = vault.positions(0)
+
+    vault.liquidate(0, 0)
+
+    position_after = vault.positions(0)
+
+    assert position_after[2] > position_before[2]
+

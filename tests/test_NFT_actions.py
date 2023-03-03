@@ -47,7 +47,7 @@ def test_cannot_claim_if_not_owner(vault, alice, nft):
             vault.claim(TOKEN_ID)
 
 
-def test_cannot_claim_if_liquidated(vault, owner, nft):
+def test_claim_zero_if_liquidated(vault, owner, nft):
     assert nft.ownerOf(TOKEN_ID) == owner
     vault.eval(
         f"self.positions[0] = Position({{token_id: {TOKEN_ID}, amount_deposited: {1*10**18}, amount_claimed: 0, shares_owned: 0, is_liquidated: True}})"
@@ -56,8 +56,8 @@ def test_cannot_claim_if_liquidated(vault, owner, nft):
     to_claim = vault.eval(f"self.amount_claimable_per_share")
     assert to_claim > 0
 
-    with boa.reverts("nothing to claim"):
-        vault.claim(TOKEN_ID)
+    amount = vault.claim(TOKEN_ID)
+    assert amount == 0
 
 
 def test_owner_can_liquidate(vault, nft, owner, alchemist):

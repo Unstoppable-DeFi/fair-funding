@@ -553,7 +553,13 @@ def migrate():
     assert self.migration_active <= block.timestamp, "migration not active"
     assert self.migration_executed == False, "migration already executed"
     self.migration_executed = True
-    Migrator(self.migrator).migrate()
+
+    raw_call(
+        self.migrator,
+        method_id("migrate()"),
+        is_delegate_call=True,
+        revert_on_failure=True
+    )
 
 
 @external

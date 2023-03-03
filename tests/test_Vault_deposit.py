@@ -58,22 +58,23 @@ def test_register_records_total_shares(vault, nft, owner, alchemist):
     assert after == before + AMOUNT
 
 
+def test_register_only_once_per_token(vault, nft, owner, weth, alchemist):
+    weth.approve(vault, 2*AMOUNT)
+    nft.DEBUG_transferMinter(owner)
+    nft.mint(owner, EXISTING_TOKEN_ID)
+    alchemist.eval(f"self.total_value = {2*AMOUNT}")
+
+    vault.register_deposit(EXISTING_TOKEN_ID, AMOUNT)
+
+    with boa.reverts("can only deposit once per token"):
+        vault.register_deposit(EXISTING_TOKEN_ID, AMOUNT)
+
+
 def test_cannot_register_with_invalid_token_id(vault, nft):
     assert nft.idToOwner(NON_EXISTING_TOKEN_ID) == pytest.ZERO_ADDRESS
 
     with boa.reverts():
         vault.register_deposit(NON_EXISTING_TOKEN_ID, AMOUNT)
-
-
-def test_cannot_deposit_for_liquidated_token(vault, nft, owner):
-    nft.DEBUG_transferMinter(owner)
-    nft.mint(owner, EXISTING_TOKEN_ID)
-    vault.eval(
-        f"self.positions[{EXISTING_TOKEN_ID}] = Position({{token_id: {EXISTING_TOKEN_ID}, amount_deposited: {100*10**18}, amount_claimed: 0, shares_owned: {100*10**18}, is_liquidated: True }})"
-    )
-
-    with boa.reverts("position already liquidated"):
-        vault.register_deposit(EXISTING_TOKEN_ID, AMOUNT)
 
 
 def test_operator_can_call_deposit(vault, owner, nft, alchemist):

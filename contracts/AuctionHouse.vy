@@ -58,6 +58,7 @@ highest_bidder: public(address)
 
 epoch_start: public(uint256)
 epoch_end: public(uint256)
+auction_started: public(bool)
 
 owner: public(address)
 suggested_owner: public(address)
@@ -225,9 +226,9 @@ def start_auction(_start_time: uint256):
         If 0 is passed, it will start the auction now.
     """
     assert msg.sender == self.owner, "unauthorized"
-    # epoch_start has already been set and is in the past
-    if self.epoch_start != 0 and self.epoch_start <= block.timestamp: 
-        raise "auction already started"
+    assert self.auction_started == False, "cannot restart auction"
+
+    self.auction_started = True
 
     start: uint256 = _start_time
     if start == 0:

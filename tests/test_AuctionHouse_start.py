@@ -1,6 +1,9 @@
 import pytest
 import boa
 
+def timetravel(to):
+    boa.env.vm.patch.timestamp = to
+
 
 def test_start_sets_epoch_start(house):
     before = house.epoch_start()
@@ -34,18 +37,32 @@ def test_cannot_start_in_the_past(house):
         house.start_auction(boa.env.vm.patch.timestamp - 1)
 
 
-def test_cannot_restart(house):
+def test_cannot_restart_when_started(house):
     house.start_auction(0)
 
-    with boa.reverts("auction already started"):
+    with boa.reverts("cannot restart auction"):
         house.start_auction(boa.env.vm.patch.timestamp + 10 * 60)
+
+
+def test_cannot_restart_after_ended(house):
+    assert house.max_token_id() == 1
+    house.start_auction(0)
+    timetravel(house.epoch_end() + 1)
+    house.settle()
+    timetravel(house.epoch_end() + 1)
+    house.settle()
+    assert house.epoch_end() == 0
+    # Auction has ended!
+
+    with boa.reverts("cannot restart auction"):
+        house.start_auction(0)
 
 
 def test_cannot_restart_between_epochs(house):
     house.start_auction(0)
     boa.env.vm.patch.timestamp = house.epoch_end() + 1
 
-    with boa.reverts("auction already started"):
+    with boa.reverts("cannot restart auction"):
         house.start_auction(0)
 
 

@@ -16,6 +16,10 @@ def test_deployment_sets_nft_address(vault, nft):
     assert vault.NFT() == nft.address
 
 
+def test_deployment_sets_owner(vault, owner):
+    assert vault.owner() == owner
+
+
 def test_operator_can_set_alchemist(vault, owner):
     assert vault.is_operator(owner)
     assert vault.alchemist() != VALID_ADDRESS

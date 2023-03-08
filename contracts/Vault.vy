@@ -109,6 +109,9 @@ positions: public(HashMap[uint256, Position])
 total_shares: public(uint256)
 amount_claimable_per_share: public(uint256)
 
+owner: public(address)
+suggested_owner: public(address)
+
 is_operator: public(HashMap[address, bool])
 is_depositor: public(HashMap[address, bool])
 
@@ -174,6 +177,14 @@ event NewMigrationAdminSuggested:
     new_admin: indexed(address)
     suggested_by: indexed(address)
 
+event OwnerTransferred:
+    new_owner: indexed(address)
+    promoted_by: indexed(address)
+
+event NewOwnerSuggested:
+    new_owner: indexed(address)
+    suggested_by: indexed(address)
+
 event MigrationActivated:
     migrator_address: address
     active_at: uint256
@@ -188,6 +199,7 @@ def __init__(
     assert _nft_address != empty(address), "invalid nft address"
     NFT = _nft_address
 
+    self.owner = msg.sender
     self.is_operator[msg.sender] = True
     self.fund_receiver = msg.sender
 
@@ -587,12 +599,42 @@ def accept_migration_admin():
 
 
 @external
+def suggest_owner(_new_owner: address):
+    """
+    @notice
+        Step 1 of the 2 step process to transfer ownership.
+        Current owner suggests a new owner.
+        Requires the new owner to accept ownership in step 2.
+    @param _new_admin
+        The address of the new owner.
+    """
+    assert msg.sender == self.owner, "unauthorized"
+    assert _new_owner != empty(address), "cannot set owner to zero address"
+    self.suggested_owner = _new_owner
+    log NewOwnerSuggested(_new_owner, msg.sender)
+
+
+@external
+def accept_owner():
+    """
+    @notice
+        Step 2 of the 2 step process to transfer ownership.
+        The suggested owner accepts the transfer and becomes the
+        new owner.
+    """
+    assert msg.sender == self.suggested_owner, "unauthorized"
+    prev_owner: address = self.owner
+    self.owner = self.suggested_owner
+    log OwnerTransferred(self.owner, prev_owner)
+
+
+@external
 def add_operator(_new_operator: address):
     """
     @notice
         Add a new address to the priviledged operators.
     """
-    assert self.is_operator[msg.sender], "unauthorized"
+    assert msg.sender == self.owner, "unauthorized"
     assert self.is_operator[_new_operator] == False, "already operator"
 
     self.is_operator[_new_operator] = True
@@ -606,7 +648,7 @@ def remove_operator(_to_remove: address):
     @notice
         Remove an existing operator from the priviledged addresses.
     """
-    assert self.is_operator[msg.sender], "unauthorized"
+    assert msg.sender == self.owner, "unauthorized"
     assert self.is_operator[_to_remove], "not an operator"
 
     self.is_operator[_to_remove] = False

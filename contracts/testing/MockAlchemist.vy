@@ -47,6 +47,9 @@ def withdrawUnderlying(
     self.wu_shares = _shares
     self.wu_recipient = _recipient
     self.wu_min_amount_out = _min_amount_out
+
+    self.shares -= _shares
+
     return _min_amount_out
 
 
@@ -64,6 +67,9 @@ def liquidate(
     self.liquidate_yield_token = _yield_token
     self.liquidate_shares = _shares
     self.liquidate_min_amount_out = _min_amount_out
+    
+    self.shares -= _shares
+    
     return _shares
 
 

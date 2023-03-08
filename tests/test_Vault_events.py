@@ -13,6 +13,8 @@ def setup(nft, weth, owner, vault, alchemist):
     nft.DEBUG_transferMinter(owner)
     nft.mint(owner, TOKEN_ID)
     alchemist.eval(f"self.total_value = {AMOUNT}")
+    alchemist.eval(f"self.shares = {AMOUNT}")
+
 
 
 def emitted(contract, event, *expected_params):

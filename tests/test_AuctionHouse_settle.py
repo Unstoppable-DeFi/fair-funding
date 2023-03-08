@@ -171,3 +171,10 @@ def test_settle_does_not_calls_vault_deposit_when_no_bids(house, alice, mock_vau
 
     assert vault_amount_after == vault_amount_before
     assert vault_token_id_after == vault_token_id_before
+
+
+def test_settle_can_only_be_called_after_auction_started(house):
+    assert house.auction_started() == False
+
+    with boa.reverts("auction not started"):
+        house.settle()

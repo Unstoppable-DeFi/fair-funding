@@ -183,6 +183,7 @@ def settle():
         address.
         Resets everything and starts the next epoch / auction.
     """
+    assert self.auction_started, "auction not started"
     assert self._epoch_in_progress() == False, "epoch not over"
 
     winner: address = self.highest_bidder

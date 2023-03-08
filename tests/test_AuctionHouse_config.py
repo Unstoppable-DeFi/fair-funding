@@ -51,6 +51,7 @@ def test_max_token_id_can_be_adjusted(house):
 
 
 def test_max_token_id_cannot_be_set_to_invalid_value(house):
+    house.start_auction(0)
     # move 1 epoch in
     boa.env.vm.patch.timestamp = house.epoch_end() + 1
     house.settle()

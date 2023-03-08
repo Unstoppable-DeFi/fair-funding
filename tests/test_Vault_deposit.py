@@ -9,7 +9,7 @@ AMOUNT = 12345 * 10**18
 
 @pytest.fixture(autouse=True)
 def approve(weth, vault, owner):
-    weth.approve(vault, AMOUNT)
+    weth.approve(vault, AMOUNT*2)
     vault.add_depositor(owner)
 
 
@@ -105,3 +105,33 @@ def test_non_depositor_cannot_call_deposit(vault, alice, nft, owner):
     with boa.env.prank(alice):
         with boa.reverts():
             vault.register_deposit(EXISTING_TOKEN_ID, AMOUNT)
+
+
+def test_amount_claimable_per_share_is_adjusted_on_new_deposits(vault, alice, owner, nft, alchemist, weth):
+    alchemist.eval(f"self.total_value = {2*AMOUNT}")
+    alchemist.eval(f"self.debt = 0")
+
+    nft.DEBUG_transferMinter(owner)
+    nft.mint(owner, EXISTING_TOKEN_ID)
+    nft.mint(alice, EXISTING_TOKEN_ID+1)
+
+    assert vault.amount_claimable_per_share() == 0
+
+    vault.register_deposit(EXISTING_TOKEN_ID, AMOUNT)
+    total_shares_before = vault.total_shares()
+
+    weth.transfer(vault.address, 10 * 10**18)
+    vault.internal._mark_as_claimable(10 * 10**18)
+
+    claimable_before = vault.amount_claimable_per_share() 
+
+    assert claimable_before > 0
+    
+    vault.register_deposit(EXISTING_TOKEN_ID+1, AMOUNT)
+
+    total_shares_after = vault.total_shares()
+    claimable_after = vault.amount_claimable_per_share()
+
+    assert total_shares_after == total_shares_before * 2
+
+    assert claimable_after == claimable_before / 2

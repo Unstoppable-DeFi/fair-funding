@@ -6,8 +6,10 @@ AMOUNT = 123 * 10**18
 
 
 @pytest.fixture(autouse=True)
-def add_weth(vault, weth):
+def add_weth(vault, weth, alchemist):
     weth.transfer(vault, 100 * 10**18)
+    alchemist.eval(f"self.shares = {AMOUNT}")
+
 
 
 def test_grants_allowance_to_alchemist(vault, weth, alchemist):

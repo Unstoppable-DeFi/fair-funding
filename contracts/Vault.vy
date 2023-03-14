@@ -345,10 +345,16 @@ def liquidate(_token_id: uint256, _min_weth_out: uint256) -> uint256:
     
     position.is_liquidated = True
     self.positions[_token_id] = position
+
+    shares_in_vault: uint256 = IAlchemist(self.alchemist).positions(self, ALCX_YVWETH)[0]
+    remaining_shares_ratio: uint256 = shares_in_vault * DECIMALS / self.total_shares
+
     self.total_shares -= position.shares_owned
 
+    remaining_position_shares: uint256 = position.shares_owned * remaining_shares_ratio / DECIMALS
+
     collateralisation: uint256 = self._latest_collateralisation()
-    shares_to_liquidate: uint256 = position.shares_owned * DECIMALS / collateralisation
+    shares_to_liquidate: uint256 = remaining_position_shares * DECIMALS / collateralisation
 
     amount_shares_liquidated: uint256 = IAlchemist(self.alchemist).liquidate(
         ALCX_YVWETH,                 # _yield_token: address,
@@ -356,7 +362,7 @@ def liquidate(_token_id: uint256, _min_weth_out: uint256) -> uint256:
         1                            # _min_amount_out: uint256 -> covered by _min_weth_out
     )
 
-    amount_to_withdraw: uint256 = position.shares_owned - amount_shares_liquidated
+    amount_to_withdraw: uint256 = remaining_position_shares - amount_shares_liquidated
     # _withdraw_underlying_from_alchemix reverts on < _min_weth_out
     amount_withdrawn: uint256 = self._withdraw_underlying_from_alchemix(amount_to_withdraw, token_owner, _min_weth_out)
 

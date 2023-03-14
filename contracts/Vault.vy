@@ -220,10 +220,10 @@ def register_deposit(_token_id: uint256, _amount: uint256):
     assert self._is_valid_token_id(_token_id)
 
     position: Position = self.positions[_token_id]
-    assert position.is_liquidated == False, "position already liquidated"
+    assert position.amount_deposited == 0, "can only deposit once per token"
 
     position.token_id = _token_id
-    position.amount_deposited += _amount
+    position.amount_deposited = _amount
 
     # transfer WETH to self
     ERC20(WETH).transferFrom(msg.sender, self, _amount)
@@ -232,7 +232,7 @@ def register_deposit(_token_id: uint256, _amount: uint256):
 
     # deposit WETH to Alchemix
     shares_issued: uint256 = self._deposit_to_alchemist(_amount)
-    position.shares_owned += shares_issued
+    position.shares_owned = shares_issued
     self.total_shares += shares_issued
 
     if self.amount_claimable_per_share > 0:

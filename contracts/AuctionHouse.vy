@@ -149,7 +149,7 @@ def bid(_token_id: uint256, _amount: uint256):
 
     assert _amount >= RESERVE_PRICE, "reserve price not met"
     assert _token_id == self.current_epoch_token_id, "token id not up for auction"
-    assert _amount > self.highest_bid * (100 + MIN_INCREMENT_PCT) / 100 , "bid not high enough" 
+    assert _amount >= self.highest_bid * (100 + MIN_INCREMENT_PCT) / 100 , "bid not high enough" 
 
     last_bidder: address = self.highest_bidder
     last_bid: uint256 = self.highest_bid

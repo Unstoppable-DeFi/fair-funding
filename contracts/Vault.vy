@@ -228,10 +228,15 @@ def register_deposit(_token_id: uint256, _amount: uint256):
     # transfer WETH to self
     ERC20(WETH).transferFrom(msg.sender, self, _amount)
 
+    total_claimable: uint256 = self.total_shares * self.amount_claimable_per_share
+
     # deposit WETH to Alchemix
     shares_issued: uint256 = self._deposit_to_alchemist(_amount)
     position.shares_owned += shares_issued
     self.total_shares += shares_issued
+
+    if self.amount_claimable_per_share > 0:
+        self.amount_claimable_per_share = total_claimable / self.total_shares
     
     self.positions[_token_id] = position
 
@@ -455,6 +460,9 @@ def _claimable_for_token(_token_id: uint256) -> uint256:
         return 0
     
     total_claimable_for_position: uint256 = position.shares_owned * self.amount_claimable_per_share / PRECISION
+    if total_claimable_for_position < position.amount_claimed:
+        return 0
+
     return total_claimable_for_position - position.amount_claimed
 
 

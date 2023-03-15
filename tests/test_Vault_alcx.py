@@ -99,7 +99,7 @@ def test_withdraw_underlying_calls_alcx_withdraw(vault, alchemist):
 
 
 def test_amount_claimable_per_eth_is_set_correctly(vault):
-    cases = [[100, 100, 1000000], [100, 200, 2000000], [200, 300, 1500000]]
+    cases = [[100, 100, 1000000000000000000], [100, 200, 2000000000000000000], [200, 300, 1500000000000000000]]
 
     r = 0
     for c in cases:

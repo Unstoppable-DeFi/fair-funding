@@ -108,6 +108,9 @@ positions: public(HashMap[uint256, Position])
 total_shares: public(uint256)
 amount_claimable_per_share: public(uint256)
 
+owner: public(address)
+suggested_owner: public(address)
+
 is_operator: public(HashMap[address, bool])
 is_depositor: public(HashMap[address, bool])
 
@@ -173,6 +176,14 @@ event NewMigrationAdminSuggested:
     new_admin: indexed(address)
     suggested_by: indexed(address)
 
+event OwnerTransferred:
+    new_owner: indexed(address)
+    promoted_by: indexed(address)
+
+event NewOwnerSuggested:
+    new_owner: indexed(address)
+    suggested_by: indexed(address)
+
 event MigrationActivated:
     migrator_address: address
     active_at: uint256
@@ -187,6 +198,7 @@ def __init__(
     assert _nft_address != empty(address), "invalid nft address"
     NFT = _nft_address
 
+    self.owner = msg.sender
     self.is_operator[msg.sender] = True
     self.fund_receiver = msg.sender
 
@@ -207,18 +219,23 @@ def register_deposit(_token_id: uint256, _amount: uint256):
     assert self._is_valid_token_id(_token_id)
 
     position: Position = self.positions[_token_id]
-    assert position.is_liquidated == False, "position already liquidated"
+    assert position.amount_deposited == 0, "can only deposit once per token"
 
     position.token_id = _token_id
-    position.amount_deposited += _amount
+    position.amount_deposited = _amount
 
     # transfer WETH to self
     ERC20(WETH).transferFrom(msg.sender, self, _amount)
 
+    total_claimable: uint256 = self.total_shares * self.amount_claimable_per_share
+
     # deposit WETH to Alchemix
     shares_issued: uint256 = self._deposit_to_alchemist(_amount)
-    position.shares_owned += shares_issued
+    position.shares_owned = shares_issued
     self.total_shares += shares_issued
+
+    if self.amount_claimable_per_share > 0:
+        self.amount_claimable_per_share = total_claimable / self.total_shares
     
     self.positions[_token_id] = position
 
@@ -326,16 +343,24 @@ def liquidate(_token_id: uint256, _min_weth_out: uint256) -> uint256:
     """
     token_owner: address = ERC721(NFT).ownerOf(_token_id)
     assert token_owner == msg.sender, "only token owner can liquidate"
+    
+    assert self.positions[_token_id].is_liquidated == False, "position already liquidated"
+
+    self._claim(_token_id)
 
     position: Position = self.positions[_token_id]
-    assert position.is_liquidated == False, "position already liquidated"
-    
     position.is_liquidated = True
     self.positions[_token_id] = position
+
+    shares_in_vault: uint256 = IAlchemist(self.alchemist).positions(self, ALCX_YVWETH)[0]
+    remaining_shares_ratio: uint256 = shares_in_vault * DECIMALS / self.total_shares
+
     self.total_shares -= position.shares_owned
 
+    remaining_position_shares: uint256 = position.shares_owned * remaining_shares_ratio / DECIMALS
+
     collateralisation: uint256 = self._latest_collateralisation()
-    shares_to_liquidate: uint256 = position.shares_owned * DECIMALS / collateralisation
+    shares_to_liquidate: uint256 = remaining_position_shares * DECIMALS / collateralisation
 
     amount_shares_liquidated: uint256 = IAlchemist(self.alchemist).liquidate(
         ALCX_YVWETH,                 # _yield_token: address,
@@ -343,7 +368,7 @@ def liquidate(_token_id: uint256, _min_weth_out: uint256) -> uint256:
         1                            # _min_amount_out: uint256 -> covered by _min_weth_out
     )
 
-    amount_to_withdraw: uint256 = position.shares_owned - amount_shares_liquidated
+    amount_to_withdraw: uint256 = remaining_position_shares - amount_shares_liquidated
     # _withdraw_underlying_from_alchemix reverts on < _min_weth_out
     amount_withdrawn: uint256 = self._withdraw_underlying_from_alchemix(amount_to_withdraw, token_owner, _min_weth_out)
 
@@ -435,12 +460,20 @@ def _claimable_for_token(_token_id: uint256) -> uint256:
     if position.is_liquidated:
         return 0
     
+
     total_claimable_for_position: uint256 = position.shares_owned * self.amount_claimable_per_share / DECIMALS
+    if total_claimable_for_position < position.amount_claimed:
+        return 0
+
     return total_claimable_for_position - position.amount_claimed
 
 
 @external
 def claim(_token_id: uint256) -> uint256:
+    return self._claim(_token_id)
+
+@internal
+def _claim(_token_id: uint256) -> uint256:
     """
     @notice
         Allows a token holder to claim his share of pending WETH.
@@ -449,8 +482,9 @@ def claim(_token_id: uint256) -> uint256:
     assert msg.sender == token_owner, "only token owner can claim"
 
     amount: uint256 = self._claimable_for_token(_token_id)
-    assert amount > 0, "nothing to claim"
-
+    if amount == 0:
+        return 0
+    
     position: Position = self.positions[_token_id]
     position.amount_claimed += amount
     self.positions[_token_id] = position
@@ -552,7 +586,13 @@ def migrate():
     assert self.migration_active <= block.timestamp, "migration not active"
     assert self.migration_executed == False, "migration already executed"
     self.migration_executed = True
-    Migrator(self.migrator).migrate()
+
+    raw_call(
+        self.migrator,
+        method_id("migrate()"),
+        is_delegate_call=True,
+        revert_on_failure=True
+    )
 
 
 @external
@@ -586,12 +626,42 @@ def accept_migration_admin():
 
 
 @external
+def suggest_owner(_new_owner: address):
+    """
+    @notice
+        Step 1 of the 2 step process to transfer ownership.
+        Current owner suggests a new owner.
+        Requires the new owner to accept ownership in step 2.
+    @param _new_admin
+        The address of the new owner.
+    """
+    assert msg.sender == self.owner, "unauthorized"
+    assert _new_owner != empty(address), "cannot set owner to zero address"
+    self.suggested_owner = _new_owner
+    log NewOwnerSuggested(_new_owner, msg.sender)
+
+
+@external
+def accept_owner():
+    """
+    @notice
+        Step 2 of the 2 step process to transfer ownership.
+        The suggested owner accepts the transfer and becomes the
+        new owner.
+    """
+    assert msg.sender == self.suggested_owner, "unauthorized"
+    prev_owner: address = self.owner
+    self.owner = self.suggested_owner
+    log OwnerTransferred(self.owner, prev_owner)
+
+
+@external
 def add_operator(_new_operator: address):
     """
     @notice
         Add a new address to the priviledged operators.
     """
-    assert self.is_operator[msg.sender], "unauthorized"
+    assert msg.sender == self.owner, "unauthorized"
     assert self.is_operator[_new_operator] == False, "already operator"
 
     self.is_operator[_new_operator] = True
@@ -605,7 +675,7 @@ def remove_operator(_to_remove: address):
     @notice
         Remove an existing operator from the priviledged addresses.
     """
-    assert self.is_operator[msg.sender], "unauthorized"
+    assert msg.sender == self.owner, "unauthorized"
     assert self.is_operator[_to_remove], "not an operator"
 
     self.is_operator[_to_remove] = False

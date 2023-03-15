@@ -344,10 +344,12 @@ def liquidate(_token_id: uint256, _min_weth_out: uint256) -> uint256:
     """
     token_owner: address = ERC721(NFT).ownerOf(_token_id)
     assert token_owner == msg.sender, "only token owner can liquidate"
+    
+    assert self.positions[_token_id].is_liquidated == False, "position already liquidated"
+
+    self._claim(_token_id)
 
     position: Position = self.positions[_token_id]
-    assert position.is_liquidated == False, "position already liquidated"
-    
     position.is_liquidated = True
     self.positions[_token_id] = position
 
@@ -468,6 +470,10 @@ def _claimable_for_token(_token_id: uint256) -> uint256:
 
 @external
 def claim(_token_id: uint256) -> uint256:
+    return self._claim(_token_id)
+
+@internal
+def _claim(_token_id: uint256) -> uint256:
     """
     @notice
         Allows a token holder to claim his share of pending WETH.
@@ -476,8 +482,9 @@ def claim(_token_id: uint256) -> uint256:
     assert msg.sender == token_owner, "only token owner can claim"
 
     amount: uint256 = self._claimable_for_token(_token_id)
-    assert amount > 0, "nothing to claim"
-
+    if amount == 0:
+        return 0
+    
     position: Position = self.positions[_token_id]
     position.amount_claimed += amount
     self.positions[_token_id] = position

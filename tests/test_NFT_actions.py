@@ -6,7 +6,7 @@ TOKEN_ID = 0
 
 
 @pytest.fixture(autouse=True)
-def setup(weth, vault, nft, owner):
+def setup(weth, vault, nft, owner, alchemist):
     weth.transfer(vault, 1 * 10**18)
     nft.DEBUG_transferMinter(owner)
     nft.mint(owner, TOKEN_ID)
@@ -16,6 +16,7 @@ def setup(weth, vault, nft, owner):
     vault.eval(f"self.amount_claimable_per_share = 0")
     vault.eval(f"self.total_shares = {10*10**18}")
     vault.eval(f"self._mark_as_claimable({1*10**18})")
+    alchemist.eval(f"self.shares = {10*10**18}")
 
 
 def test_claim_transfers_correct_amount(vault, weth, owner, nft):

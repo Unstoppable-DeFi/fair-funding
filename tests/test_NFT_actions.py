@@ -6,7 +6,7 @@ TOKEN_ID = 0
 
 
 @pytest.fixture(autouse=True)
-def setup(weth, vault, nft, owner):
+def setup(weth, vault, nft, owner, alchemist):
     weth.transfer(vault, 1 * 10**18)
     nft.DEBUG_transferMinter(owner)
     nft.mint(owner, TOKEN_ID)
@@ -16,6 +16,7 @@ def setup(weth, vault, nft, owner):
     vault.eval(f"self.amount_claimable_per_share = 0")
     vault.eval(f"self.total_shares = {10*10**18}")
     vault.eval(f"self._mark_as_claimable({1*10**18})")
+    alchemist.eval(f"self.shares = {10*10**18}")
 
 
 def test_claim_transfers_correct_amount(vault, weth, owner, nft):
@@ -47,7 +48,7 @@ def test_cannot_claim_if_not_owner(vault, alice, nft):
             vault.claim(TOKEN_ID)
 
 
-def test_cannot_claim_if_liquidated(vault, owner, nft):
+def test_claim_zero_if_liquidated(vault, owner, nft):
     assert nft.ownerOf(TOKEN_ID) == owner
     vault.eval(
         f"self.positions[0] = Position({{token_id: {TOKEN_ID}, amount_deposited: {1*10**18}, amount_claimed: 0, shares_owned: 0, is_liquidated: True}})"
@@ -56,8 +57,8 @@ def test_cannot_claim_if_liquidated(vault, owner, nft):
     to_claim = vault.eval(f"self.amount_claimable_per_share")
     assert to_claim > 0
 
-    with boa.reverts("nothing to claim"):
-        vault.claim(TOKEN_ID)
+    amount = vault.claim(TOKEN_ID)
+    assert amount == 0
 
 
 def test_owner_can_liquidate(vault, nft, owner, alchemist):
